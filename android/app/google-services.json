@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "549822134327",
+    "project_id": "anbu-memory",
+    "storage_bucket": "anbu-memory.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:549822134327:android:f284028eef2750ef8e67b2",
+        "android_client_info": {
+          "package_name": "com.example.anbuMemory"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA8God2WVW_HunaAW9wwzjCDkBUaupBWQ0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:549822134327:android:60f3842e77416ba78e67b2",
+        "android_client_info": {
+          "package_name": "com.example.anbu_memory"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA8God2WVW_HunaAW9wwzjCDkBUaupBWQ0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
