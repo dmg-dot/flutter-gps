@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:isolate';
 import 'dart:ui';
 
 import 'package:background_locator_2/background_locator.dart';
@@ -8,9 +7,8 @@ import 'package:background_locator_2/settings/android_settings.dart';
 import 'package:background_locator_2/settings/ios_settings.dart';
 import 'package:background_locator_2/settings/locator_settings.dart';
 import 'package:flutter/material.dart';
-import 'package:location_permissions/location_permissions.dart';
 
-import 'file_manager.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'location_callback_handler.dart';
 import 'location_service_repository.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -31,28 +29,40 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  ReceivePort port = ReceivePort();
 
-  String logStr = '';
   bool isRunning = false;
-  LocationDto? lastLocation = null;
 
-  double getLocationLatitude() {
-    if(lastLocation == null) {
-      return 0; 
-    }
-    else {
-      return lastLocation!.latitude;
-    }
-  }
+void _permission() async {
+    var requestStatus = await Permission.location.request();
+    var status = await Permission.location.status;
+    if (requestStatus.isGranted && status.isLimited) {
+    // isLimited - 제한적 동의 (ios 14 < )
+      // 요청 동의됨
+      print("isGranted");
+      if (await Permission.locationWhenInUse.serviceStatus.isEnabled) {
+        // 요청 동의 + gps 켜짐
 
-  double getLocationLongitude() {
-    if(lastLocation == null) {
-      return 0;
+        // var position = await Geolocator.getCurrentPosition();
+        // print("serviceStatusIsEnabled position = ${position.toString()}");
+      } else {
+        // 요청 동의 + gps 꺼짐
+        print("serviceStatusIsDisabled");
+      }
+    } else if (requestStatus.isPermanentlyDenied ||
+        status.isPermanentlyDenied) {
+      // 권한 요청 거부, 해당 권한에 대한 요청에 대해 다시 묻지 않음 선택하여 설정화면에서 변경해야함. android
+      print("isPermanentlyDenied");
+      openAppSettings();
+    } else if (status.isRestricted) {
+      // 권한 요청 거부, 해당 권한에 대한 요청을 표시하지 않도록 선택하여 설정화면에서 변경해야함. ios
+      print("isRestricted");
+      openAppSettings();
+    } else if (status.isDenied) {
+      // 권한 요청 거절
+      print("isDenied");
     }
-    else {
-      return lastLocation!.longitude;
-    }
+    print("requestStatus ${requestStatus.name}");
+    print("status ${status.name}");
   }
 
   @override
@@ -65,35 +75,12 @@ class _MyAppState extends State<MyApp> {
       IsolateNameServer.removePortNameMapping(
           LocationServiceRepository.isolateName);
     }
-
-    IsolateNameServer.registerPortWithName(
-        port.sendPort, LocationServiceRepository.isolateName);
-
-    port.listen(
-      (dynamic data) async {
-        await updateUI(data);
-      },
-    );
     initPlatformState();
   }
 
   @override
   void dispose() {
     super.dispose();
-  }
-
-  Future<void> updateUI(dynamic data) async {
-    final log = await FileManager.readLogFile();
-
-    LocationDto? locationDto = (data != null) ? LocationDto.fromJson(data) : null;
-    await _updateNotificationText(locationDto);
-
-    setState(() {
-      if (data != null) {
-        lastLocation = locationDto;
-      }
-      logStr = log;
-    });
   }
 
   Future<void> _updateNotificationText(LocationDto? data) async {
@@ -110,7 +97,6 @@ class _MyAppState extends State<MyApp> {
   Future<void> initPlatformState() async {
     print('Initializing...');
     await BackgroundLocator.initialize();
-    logStr = await FileManager.readLogFile();
     print('Initialization done');
     final _isRunning = await BackgroundLocator.isServiceRunning();
     setState(() {
@@ -127,6 +113,7 @@ class _MyAppState extends State<MyApp> {
         child: Text('Start2'),
         onPressed: () {
           _onStart();
+          _permission();
         },
       ),
     );
@@ -136,20 +123,6 @@ class _MyAppState extends State<MyApp> {
         child: Text('Stop'),
         onPressed: () {
           onStop();
-        },
-      ),
-    );
-    final clear = SizedBox(
-      width: double.maxFinite,
-      child: ElevatedButton(
-        child: Text('Clear Log2'),
-        onPressed: () async {
-
-
-          FileManager.clearLogFile();
-          setState(() {
-            logStr = '';
-          });
         },
       ),
     );
@@ -163,10 +136,6 @@ class _MyAppState extends State<MyApp> {
     }
     final status = Text("Status: $msgStatus");
 
-    final log = Text(
-      getLocationLatitude().toString() + getLocationLongitude().toString()
-    );
-
     return MaterialApp(
       home: Scaffold(
         appBar: AppBar(
@@ -178,7 +147,7 @@ class _MyAppState extends State<MyApp> {
           child: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
-              children: <Widget>[start, stop, clear, status, log],
+              children: <Widget>[start, stop, status],
             ),
           ),
         ),
@@ -192,46 +161,16 @@ class _MyAppState extends State<MyApp> {
     setState(() {
       isRunning = _isRunning;
     });
-    print(logStr);
   }
 
   void _onStart() async {
-    if (await _checkLocationPermission()) {
+      _permission();
       await _startLocator();
       final _isRunning = await BackgroundLocator.isServiceRunning();
-      // print(_isRunning);
 
       setState(() {
         isRunning = _isRunning;
-        lastLocation = null;
       });
-    } else {
-      // show error
-    }
-  }
-
-  Future<bool> _checkLocationPermission() async {
-    final access = await LocationPermissions().checkPermissionStatus();
-    switch (access) {
-      case PermissionStatus.unknown:
-      case PermissionStatus.denied:
-      case PermissionStatus.restricted:
-        final permission = await LocationPermissions().requestPermissions(
-          permissionLevel: LocationPermissionLevel.locationAlways,
-        );
-        if (permission == PermissionStatus.granted) {
-          return true;
-        } else {
-          return false;
-        }
-        break;
-      case PermissionStatus.granted:
-        return true;
-        break;
-      default:
-        return false;
-        break;
-    }
   }
 
   Future<void> _startLocator() async{
